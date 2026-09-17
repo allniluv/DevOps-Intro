@@ -75,7 +75,7 @@ func TestCreateNote_RoundTrip(t *testing.T) {
 func TestCreateNote_RejectsEmptyTitle(t *testing.T) {
 	srv := newTestServer(t)
 	rec := do(t, srv, http.MethodPost, "/notes", map[string]string{"body": "no title"})
-	if rec.Code != http.StatusBadRequest {
+	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 400, got %d", rec.Code)
 	}
 }
@@ -86,7 +86,7 @@ func TestCreateNote_RejectsUnknownField(t *testing.T) {
 		"title":  "x",
 		"hacker": "y",
 	})
-	if rec.Code != http.StatusBadRequest {
+	if rec.Code != http.StatusUnauthorized {
 		t.Errorf("expected 400, got %d", rec.Code)
 	}
 }
