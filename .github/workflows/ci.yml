@@ -1,5 +1,9 @@
 name: QuickNotes CI
 
+concurrency:
+  group: quicknotes-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
