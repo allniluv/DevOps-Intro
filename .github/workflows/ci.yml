@@ -16,8 +16,13 @@ permissions:
 
 jobs:
   vet:
-    name: vet
+    name: vet (Go ${{ matrix.go-version }})
     runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.23', '1.24']
 
     steps:
       - name: Checkout repository
@@ -26,7 +31,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: '1.24'
+          go-version: ${{ matrix.go-version }}
           cache: false
 
       - name: Cache Go modules and build cache
@@ -35,17 +40,22 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-1.24-${{ hashFiles('app/go.mod') }}
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('app/go.mod') }}
           restore-keys: |
-            ${{ runner.os }}-go-1.24-
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
 
       - name: Run go vet
         working-directory: app
         run: go vet ./...
 
   test:
-    name: test
+    name: test (Go ${{ matrix.go-version }})
     runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.23', '1.24']
 
     steps:
       - name: Checkout repository
@@ -54,7 +64,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: '1.24'
+          go-version: ${{ matrix.go-version }}
           cache: false
 
       - name: Cache Go modules and build cache
@@ -63,9 +73,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: ${{ runner.os }}-go-1.24-${{ hashFiles('app/go.mod') }}
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('app/go.mod') }}
           restore-keys: |
-            ${{ runner.os }}-go-1.24-
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
 
       - name: Run tests
         working-directory: app
@@ -84,16 +94,6 @@ jobs:
         with:
           go-version-file: app/go.mod
           cache: false
-
-      - name: Cache Go modules and build cache
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.0
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-1.24-${{ hashFiles('app/go.mod') }}
-          restore-keys: |
-            ${{ runner.os }}-go-1.24-
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@4afd733a84b1f43292c63897423277bb7f4313a9 # v8.0.0
