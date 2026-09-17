@@ -196,9 +196,78 @@ The final workflow successfully passed all five checks:
 
 The final working tree was clean and the `feature/lab3` branch was synchronized with `origin/feature/lab3`.
 
-# 9. Remaining verification
 
-The final PR gate must also be verified through branch protection by requiring the CI status checks on `main`.
+# 9. Branch protection and failure verification
 
-A deliberate CI failure should be introduced and observed as a blocked PR check, followed by a fix and a successful CI run.
+Branch protection was configured on `main` in the fork.
 
+All five CI status checks were configured as required checks:
+
+* `vet (Go 1.23)`
+* `vet (Go 1.24)`
+* `test (Go 1.23)`
+* `test (Go 1.24)`
+* `lint`
+
+A deliberate test failure was introduced by changing the expected HTTP status in `app/handlers_test.go`.
+
+Commit:
+
+`28798ea test(lab3): introduce deliberate CI failure`
+
+The CI pipeline failed as expected, and the PR was blocked because the required checks were not successful.
+
+The test was then restored.
+
+Commit:
+
+`19dc4d0 test(lab3): restore passing tests`
+
+After the fix, all five required CI checks passed again.
+
+# 10. Bonus — Additional CI optimizations
+
+Three additional CI optimizations were implemented.
+
+## 10.1 Concurrency control
+
+The workflow uses `concurrency` with `cancel-in-progress: true`.
+
+This cancels an obsolete workflow when a newer workflow for the same branch starts and saves CI resources.
+
+Measured wall-clock time: approximately 37 seconds.
+
+## 10.2 Job timeouts
+
+Each CI job has a five-minute timeout using `timeout-minutes: 5`.
+
+This prevents a stuck job from consuming runner resources indefinitely.
+
+Measured wall-clock time: approximately 33 seconds.
+
+## 10.3 Matrix parallelism limit
+
+The `vet` and `test` matrix strategies use `max-parallel: 2`.
+
+Both Go versions can still run in parallel, while the maximum number of matrix jobs is explicitly controlled.
+
+Measured wall-clock time: approximately 31 seconds.
+
+## 10.4 Bonus timing comparison
+
+| Configuration | Wall-clock |
+|---|---:|
+| Baseline | ~25 s |
+| Cache only | ~37 s |
+| Cache + matrix | ~36 s |
+| + concurrency | ~37 s |
+| + timeout | ~33 s |
+| + max-parallel: 2 | ~31 s |
+
+These measurements were taken from actual GitHub Actions runs. CI execution time can vary between runs because GitHub-hosted runners have variable startup and scheduling overhead.
+
+The final observed wall-clock time of approximately 31 seconds is below the 90-second target.
+
+## 10.5 Bottleneck analysis
+
+The main bottleneck is not dependency installation because this repository has no third-party Go dependencies and no `go.sum` file. Runner startup and Go toolchain setup contribute significantly to the total wall-clock time. The matrix increases total compute work because `vet` and `test` are executed for two Go versions, but the jobs run in parallel. The observed differences between configurations are relatively small and should not be interpreted as deterministic speedups. The final pipeline remains below the 90-second target while providing compatibility checks, caching, concurrency control, timeouts, and explicit matrix parallelism.
