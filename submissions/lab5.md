@@ -213,3 +213,46 @@ The Go provisioning was verified to be reproducible and idempotent.
 QuickNotes responded successfully both inside the VM and from the host machine.
 
 A Vagrant snapshot was used to recover the VM after deliberately removing Go. The snapshot restored the Go toolchain successfully, with a measured restore time of `11.191` seconds.
+
+## Bonus Task — VM vs Container Resource Baseline
+
+### B.1 — Vagrant VM baseline
+
+The Vagrant VM was measured while running idle.
+
+Results:
+
+- Cold boot: `28.140 seconds`
+- Idle RAM: `237 MiB used` out of `824 MiB`
+- Process count: `105`
+- On-disk VM size: `3.2 GB`
+
+The VM was halted and started again with `vagrant up --no-provision` so that the measurement represented boot time rather than the first provisioning.
+
+### B.2 — Docker container baseline
+
+The same QuickNotes application was run in a `golang:1.24` Docker container using the application source from the repository.
+
+The container was verified with:
+
+`{"notes":6,"status":"ok"}`
+
+Results:
+
+- Cold start: `0.081 seconds`
+- Idle RAM: `10.45 MiB`
+- Process count: `2`
+- Docker image size: `1.33 GB`
+
+The Docker container exposed QuickNotes on host port `28080` and returned HTTP `200 OK` from `/health`.
+
+### B.3 — Comparison
+
+| Dimension | Vagrant VM | Docker container |
+|---|---:|---:|
+| Cold start | 28.140 s | 0.081 s |
+| Idle RAM | 237 MiB | 10.45 MiB |
+| On-disk size | 3.2 GB | 1.33 GB image |
+| Process count (guest) | 105 | 2 |
+
+The cold-start and process-count differences were the most noticeable results: the VM required 28.140 seconds to boot and had 105 processes, while the container started in 0.081 seconds and had only 2 processes. The container also used substantially less idle RAM because it shared the host kernel instead of running a complete guest operating system. A VM is useful when stronger isolation, a separate operating-system environment, or different kernel requirements are important. Containers are well suited to lightweight, portable, stateless services where fast startup and efficient resource usage are important. These measurements help explain why containers became widely adopted for stateless microservices during the 2014–2020 period: they provided fast startup, low overhead, and efficient packaging compared with running a separate VM for each service.
