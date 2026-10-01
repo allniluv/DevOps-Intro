@@ -239,15 +239,66 @@ and:
 
 The timer was verified as enabled and active.
 
-`systemctl list-timers` showed the next execution approximately five minutes after activation.
+`systemctl list-timers` showed the scheduled execution and confirmed a five-minute interval.
 
-The journal confirmed that the timer automatically started the `ansible-pull` service.
+The journal confirmed that the timer automatically started the `ansible-pull` service at `12:30:46 UTC`.
 
-The first automatic pull failed because the `feature/lab7` branch had not yet been pushed to the GitHub fork. The failure was:
+## Automatic convergence demonstration
 
-`error: pathspec 'feature/lab7' did not match any file(s) known to git`
+After the `feature/lab7` branch was pushed to the GitHub fork, a new commit was created:
 
-This confirmed that the timer and service were functioning, while the remaining issue was that the requested remote branch was not yet published.
+`a02f133` — `test(lab7): demonstrate ansible-pull convergence`
+
+The VM initially had commit `974d8a3`. The automatic pull updated the working copy from:
+
+`974d8a3`
+
+to:
+
+`a02f133`
+
+The journal showed:
+
+`before: 974d8a3...`
+
+`after: a02f133...`
+
+and:
+
+`changed: true`
+
+The updated Git commit changed the QuickNotes systemd template by adding:
+
+`Environment="LAB7_PULL_DEMO=enabled"`
+
+During automatic convergence:
+
+- `Install systemd unit` changed
+- `Restart QuickNotes` handler executed
+- play recap reported `ok=11 changed=2 failed=0`
+- the resulting systemd unit contained `Environment="LAB7_PULL_DEMO=enabled"`
+
+This demonstrated the complete pull-based convergence flow:
+
+Git commit
+      ↓
+push to GitHub
+      ↓
+5-minute systemd timer
+      ↓
+ansible-pull
+      ↓
+template change
+      ↓
+handler restart
+      ↓
+updated QuickNotes service
+
+QuickNotes remained healthy after the automatic restart:
+
+`{"notes":4,"status":"ok"}`
+
+The warning about `quicknotes-vm` in the `ansible-pull` journal is expected because the bonus inventory intentionally targets `localhost` through the local connection.
 
 ## h. Security benefit of pull-based configuration
 
@@ -296,5 +347,8 @@ Verified:
 - local `ansible-pull` inventory
 - systemd `ansible-pull` service
 - 5-minute systemd timer
-- automatic timer invocation verified in the journal
-- Git branch publication remains the final step before successful automatic pull
+- automatic timer invocation
+- Git commit pulled automatically from the remote branch
+- template convergence through `ansible-pull`
+- handler-triggered QuickNotes restart
+- final health check after automatic convergence
