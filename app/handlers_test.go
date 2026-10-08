@@ -31,8 +31,20 @@ func do(t *testing.T, srv *Server, method, target string, body any) *httptest.Re
 	}
 	req := httptest.NewRequest(method, target, &buf)
 	rec := httptest.NewRecorder()
-	srv.Routes().ServeHTTP(rec, req)
+	securityHeaders(srv.Routes()).ServeHTTP(rec, req)
 	return rec
+}
+
+func TestRoutes_404HasNoStoreCacheHeader(t *testing.T) {
+	srv := newTestServer(t)
+	rec := do(t, srv, http.MethodGet, "/", nil)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
+	}
 }
 
 func TestHealth_ReportsCount(t *testing.T) {
@@ -41,6 +53,9 @@ func TestHealth_ReportsCount(t *testing.T) {
 	rec := do(t, srv, http.MethodGet, "/health", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status: %d", rec.Code)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Errorf("Cache-Control = %q, want %q", got, "no-store")
 	}
 	var got map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
@@ -130,4 +145,3 @@ func TestMetrics_ExposesPrometheusFormat(t *testing.T) {
 		}
 	}
 }
-
