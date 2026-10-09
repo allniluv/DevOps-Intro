@@ -40,13 +40,3 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Trigger Render deploy
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-          IMAGE_URL: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-        run: |
-          encoded_image="$(python3 -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["IMAGE_URL"], safe=""))')"
-
-          curl --fail-with-body --retry 3 --retry-delay 5 \
-            "${RENDER_DEPLOY_HOOK_URL}&imgURL=${encoded_image}"

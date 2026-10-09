@@ -2,118 +2,110 @@
 
 ## Goal
 
-Automate QuickNotes releases with GitHub Actions, publish a container image to GitHub Container Registry (GHCR), and deploy the application to a cloud hosting provider.
+Automate QuickNotes releases with GitHub Actions, publish versioned container images to GitHub Container Registry (GHCR), and evaluate manual stop/start behavior using GitHub Codespaces.
 
 ## Task 1 — Release automation
 
-Implemented a GitHub Actions release workflow in `.github/workflows/release.yml`.
+Implemented `.github/workflows/release.yml`.
 
 The workflow:
+- Triggers on version tags matching `v*`.
+- Builds the QuickNotes container image for `linux/amd64`.
+- Publishes versioned and `latest` tags to GHCR.
+- Uses `GITHUB_TOKEN` with `packages: write` and read-only repository contents permission.
+- Pins third-party GitHub Actions to full commit SHAs.
 
-* Triggers on version tags matching `v*`.
-* Builds the QuickNotes container image for `linux/amd64`.
-* Publishes versioned and `latest` images to GHCR.
-* Uses `GITHUB_TOKEN` with the required package permissions.
-* Uses a GitHub Actions secret for the Render deploy hook.
-* Pins third-party GitHub Actions to full commit SHAs.
-
-The release workflow completed successfully for `v0.1.1`, including the Render deploy-hook step.
+The release for `v0.1.1` completed successfully.
 
 Published image:
 
 `ghcr.io/allniluv/devops-intro/quicknotes:v0.1.1`
 
-## Task 2 — Cloud deployment
+Successful GitHub Actions run:
+https://github.com/allniluv/DevOps-Intro/actions/runs/37837208428
 
-QuickNotes was deployed to Render using the published GHCR image.
+The Codespaces experiment is documented separately in `cloud/codespaces.md`. The release workflow publishes images; starting a Codespace is a manual operation.
 
-* Public URL: https://quicknotes-v0-1-0-0bjb.onrender.com
-* Health endpoint: `/health`
-* Container architecture: `linux/amd64`
-* Container port configuration: `ADDR=:10000`
-* Render port: `10000`
+## Task 2 — GitHub Codespaces (Option B)
 
-The health endpoint returned HTTP 200 with a JSON response indicating `"status":"ok"`. The `/notes` endpoint returned the seeded notes.
+The QuickNotes application was run in a GitHub Codespace using `.devcontainer/devcontainer.json`. Port `8080` was forwarded for access to `/health` and `/notes`.
 
-### Latency measurements
+The application returned HTTP 200 from `/health` when running. The response reported five notes after the persistence test.
 
-Warm requests:
+### Warm latency measurements
+
+Five initial successful requests to the public `/health` endpoint:
 
 | Request | Latency |
-| ------- | ------: |
-| 1       | 0.551 s |
-| 2       | 0.623 s |
-| 3       | 0.752 s |
-| 4       | 0.695 s |
-| 5       | 0.761 s |
+| --- | ---: |
+| 1 | 0.190398 s |
+| 2 | 0.129646 s |
+| 3 | 0.059126 s |
+| 4 | 0.171838 s |
+| 5 | 0.119837 s |
 
-The median warm latency (p50) for these five samples was approximately **0.695 seconds**.
+The median (p50) was **0.129646 seconds**.
 
-Cold requests after an idle period:
+### Manual stop/start experiment
 
-| Request time (MSK) | HTTP status |  Latency |
-| ------------------ | ----------: | -------: |
-| Oct 8, 23:30       |         200 | 14.150 s |
-| Oct 9, 07:38       |         200 | 33.296 s |
-| Oct 9, 08:00       |         200 | 13.941 s |
+A request to the public URL does not automatically start a stopped Codespace. The observed responses while stopped were:
 
-The mean of these three cold-request measurements was approximately **20.462 seconds**. These results show that cold starts can be significantly slower than warm requests.
+| Cycle | HTTP status | Response time |
+| --- | ---: | ---: |
+| 1 | 502 | 0.916338 s |
+| 2 | 502 | 5.968821 s |
+| 3 | 302 | 0.784665 s |
+
+After manually starting the Codespace, time from the beginning of the polling script until the first successful health response was measured:
+
+| Cycle | Observed recovery |
+| --- | ---: |
+| 1 | 1.312 s |
+| 2 | 1.165 s |
+| 3 | 0.859 s |
+
+These recovery measurements begin when the polling script starts after clicking Start. They are not exact measurements from the click itself. A stopped Codespace requires manual start; requests do not wake it automatically.
+
+The public tunnel was intermittently unstable during later checks, including HTTP 502 responses and one timeout in a set of five checks. Four of those five checks returned HTTP 200. The results therefore demonstrate the observed behavior in this experiment, not a guarantee of public endpoint availability.
 
 ### Persistence test
 
-A test note titled `Lab 10 persistence test` was created successfully with HTTP 201 and ID 5. It was initially visible through the API.
+Before stopping the Codespace, a note was created through the API:
 
-After a subsequent Render deployment, the health endpoint reported four notes and the test note was no longer present. It was also absent during later checks. Therefore, the observed test note was not durable across the deployment/lifecycle events tested.
+- ID: `5`
+- Title: `Lab 10 Codespaces persistence test`
+- Body: `Created before stopping and restarting the Codespace.`
+
+After stopping and starting the Codespace, the note was found in `.codespace-data/notes.json`. The application log reported that five notes were loaded, and the note was subsequently retrieved through the public `/notes` endpoint.
+
+**Result:** the test note survived the stop/start lifecycle tested. This demonstrates persistence for this Codespace experiment, but does not establish that data would survive deletion or recreation of the Codespace.
 
 ## Design questions
 
-### d. Why use a container registry?
+### a. OIDC vs. GITHUB_TOKEN
 
-A container registry stores versioned images so deployment environments can pull the same built artifact. This separates building from running and makes releases easier to reproduce and roll back.
+For publishing to GHCR from the same repository, `GITHUB_TOKEN` with `packages: write` is sufficient. OIDC is useful for obtaining short-lived credentials from external cloud providers without storing long-lived secrets.
 
-### e. Why deploy an existing image instead of building on the hosting provider?
+### b. `latest` vs. immutable version tags
 
-Deploying an image from GHCR lets CI build and publish the artifact once, while Render runs that exact image. This improves consistency between the release workflow and the deployed version.
-
-### f. What are the limitations of the deployment?
-
-The measurements show a substantial cold-start delay. The persistence test also showed that the test note did not survive a deployment/lifecycle event. A production deployment that requires durable user data should use an appropriate persistent storage service and should be tested for availability and recovery.
-
-## Conclusion
-
-The release workflow successfully built and published the QuickNotes image and triggered deployment to Render. The public health endpoint returned HTTP 200. Warm requests were faster than cold requests, and the persistence test identified a limitation that should be addressed before using the deployment for durable user data.
-
-## Task 1 — Design questions
-
-### a. OIDC vs GITHUB_TOKEN
-
-For publishing to GHCR from the same repository, GITHUB_TOKEN with packages: write is sufficient. OIDC is useful for authenticating to external cloud providers without storing long-lived credentials. It provides short-lived, identity-based credentials that the provider can validate.
-
-### b. latest vs immutable version tags
-
-An immutable version tag such as v0.1.1 identifies a specific release and supports reproducible deployments and rollbacks. The latest tag is convenient when users want the newest release without specifying a version. Publishing both provides convenience while retaining version-specific deployment options.
+A version tag such as `v0.1.1` identifies a specific release and supports reproducible deployments and rollbacks. `latest` is convenient for users who want the newest published image without specifying a version. Publishing both provides convenience and version-specific references.
 
 ### c. Least-privilege permissions
 
-The principle of least privilege grants a workflow only the permissions it needs. packages: write permits publishing container images without unnecessary write access to repository contents or other resources. If a workflow step is compromised, narrow permissions reduce the potential damage compared with broad write access.
+A workflow should receive only the permissions it needs. `packages: write` allows the release workflow to publish container images without granting unnecessary write access to repository contents.
 
-## Additional deployment configuration
+### d. Why use a container registry?
 
-- Hosting option: Render Free Web Service using the existing public GHCR image.
-- Render environment variables: PORT=10000 and ADDR=:10000.
-- Health check path: /health.
-- The application returned HTTP 200 from /health during the recorded checks.
-- The release workflow uses the RENDER_DEPLOY_HOOK_URL GitHub Actions secret; the secret value is not stored in this repository.
+A container registry stores versioned images so deployment environments can retrieve a built artifact. This separates building from running and makes releases easier to reproduce and roll back.
 
-### Additional design details
+### e. Why publish an existing image?
 
-Render free services spin down after inactivity, so waking a container adds startup and scheduling delay. Cloud Run is designed for managed serverless scaling and can have different startup and scaling characteristics; both platforms trade idle resource usage for cold-start latency.
+Building and publishing an image in CI creates a release artifact that can be referenced by version. A deployment environment can run that artifact rather than independently rebuilding the application source.
 
-Render supplies PORT to tell the application which port to listen on. EXPOSE in a Dockerfile is image metadata, not a command that configures the application listener. Setting PORT=10000 and ADDR=:10000 makes the configured ports agree and avoids a port-mismatch restart.
+### f. What are the limitations of this deployment approach?
 
-Using an existing GHCR image separates CI building from deployment and allows the same artifact to be scanned and deployed. Building from source on Render can be simpler initially, but may introduce differences in build caching and artifact reproducibility. The persistence test note disappeared after a deployment/lifecycle event, so the observed storage was not durable; persistent user data requires an appropriate durable storage service.
+A stopped Codespace does not automatically start when its public URL is requested. Manual startup introduces an availability gap. In this experiment, the forwarded public tunnel also returned intermittent 502 responses and a timeout. The application data file survived the tested stop/start cycle, but Codespaces storage should not be treated as a substitute for a dedicated durable production database.
 
+## Conclusion
 
-## CI release workflow evidence
-
-Successful GitHub Actions run: https://github.com/allniluv/DevOps-Intro/actions/runs/37837208428
+The release workflow successfully published the QuickNotes image to GHCR. The Codespaces experiment recorded warm latency, three manual stop/start recovery measurements, stopped-state responses, and a successful persistence check for the test note. The experiment also revealed limitations: manual startup is required and the public forwarded endpoint was intermittently unavailable. These results describe the tested setup and should not be interpreted as a production availability guarantee.
