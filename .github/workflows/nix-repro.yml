@@ -19,7 +19,9 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
 
       - name: Build Docker image
-        run: nix build .#docker
+        env:
+          SOURCE_DATE_EPOCH: "1700000000"
+        run: nix build --impure .#docker
 
       - name: Calculate digest
         id: digest
@@ -42,7 +44,9 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
 
       - name: Build Docker image
-        run: nix build .#docker
+        env:
+          SOURCE_DATE_EPOCH: "1800000000"
+        run: nix build --impure .#docker
 
       - name: Calculate digest
         id: digest
