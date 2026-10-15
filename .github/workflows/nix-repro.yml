@@ -1,0 +1,72 @@
+name: Nix reproducibility
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-a:
+    name: Build A
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.digest.outputs.sha256 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+
+      - name: Build Docker image
+        run: nix build .#docker
+
+      - name: Calculate digest
+        id: digest
+        run: |
+          DIGEST="$(sha256sum result | awk '{print $1}')"
+          echo "sha256=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Build A digest: $DIGEST"
+
+  build-b:
+    name: Build B
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.digest.outputs.sha256 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+
+      - name: Build Docker image
+        run: nix build .#docker
+
+      - name: Calculate digest
+        id: digest
+        run: |
+          DIGEST="$(sha256sum result | awk '{print $1}')"
+          echo "sha256=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Build B digest: $DIGEST"
+
+  compare:
+    name: Compare digests
+    runs-on: ubuntu-latest
+    needs:
+      - build-a
+      - build-b
+
+    steps:
+      - name: Compare digests
+        run: |
+          echo "Build A: ${{ needs.build-a.outputs.digest }}"
+          echo "Build B: ${{ needs.build-b.outputs.digest }}"
+
+          if [ "${{ needs.build-a.outputs.digest }}" != "${{ needs.build-b.outputs.digest }}" ]; then
+            echo "ERROR: Nix builds are NOT reproducible"
+            exit 1
+          fi
+
+          echo "OK: Nix builds are reproducible"
