@@ -27,8 +27,6 @@
             inherit system;
           };
 
-          ciEpoch = builtins.getEnv "SOURCE_DATE_EPOCH";
-
           quicknotes = pkgs.buildGoModule {
             pname = "quicknotes";
             version = "0.1.0";
@@ -73,7 +71,6 @@
               mkdir -p ./app
               install -d -m 0777 ./data
               cp ${./app/seed.json} ./app/seed.json
-              printf '%s\n' "${ciEpoch}" > ./app/ci-epoch
             '';
 
             config = {
